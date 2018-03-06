@@ -2,12 +2,16 @@ import React from 'react';
 import PromiseFileReader from 'promise-file-reader';
 import Dropzone from 'react-dropzone';
 import pako from 'pako';
+import './App.css';
+import Chromosomes from './Chromosomes';
+
 
 class App extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      fastq: null,
+      variants: [],
+      reads: [],
     };
     this.onDrop = this.onDrop.bind(this);
   }
@@ -17,7 +21,11 @@ class App extends React.Component {
     if (window.location.hostname === 'localhost') {
       fetch('samples/TEST_R1.fastq.gz')
         .then(file => file.blob())
-        .then(blob => this.parseFASTQ(blob))
+        .then(blob => this.parseFASTQFile(blob))
+        .catch(error => console.log(error));
+      fetch('samples/color.json')
+        .then(file => file.blob())
+        .then(text => this.parseColorFile(text))
         .catch(error => console.log(error));
     }
   }
@@ -25,7 +33,7 @@ class App extends React.Component {
   onDrop(files) {
     files.forEach((file) => {
       if (file.name.endsWith('fastq.gz')) {
-        this.parseFASTQ(file);
+        this.parseFASTQFile(file);
       } else {
         /* eslint no-alert: 0 */
         window.alert('Unknown file type, must be clinical .xlsx or genomic .xml');
@@ -33,7 +41,21 @@ class App extends React.Component {
     });
   }
 
-  parseFASTQ(file) {
+  parseColorFile(file) {
+    console.log('Parsing Color JSON file');
+    PromiseFileReader.readAsText(file)
+      .then(text => JSON.parse(text))
+      .then((color) => {
+        if (color.type !== 'gene_report.released') {
+          throw new Error('Illegal argument: ');
+        }
+        const variants = color.data.variants.map(variant => variant.chgvs);
+        this.setState({ variants });
+      })
+      .catch(error => console.log(error));
+  }
+
+  parseFASTQFile(file) {
     // See https://github.com/robertaboukhalil/fastq.bio/blob/master/fastq.bio.js
     PromiseFileReader.readAsArrayBuffer(file)
       .then((arrayBuffer) => {
@@ -42,28 +64,29 @@ class App extends React.Component {
         const inflated = pako.inflate(data);
         const fastq = new TextDecoder('utf-8').decode(inflated).split('\n');
         console.log(fastq[0]);
-        this.setState({ fastq });
+        // const reads = fastq.slice(0, 4) : [];
+        const reads = fastq.filter((value, index) => index % 4 === 1);
+        this.setState({ reads });
       })
       .catch(error => console.log(error));
   }
 
   render() {
-    const reads = this.state.fastq ? this.state.fastq.slice(0, 4) : [];
-    const listItems = reads.map(read => <p> {read} </p>);
     return (
       <div className="App">
         <header className="App-header">
-          <h1 className="App-title">iBRCA</h1>
+          <h1 className="App-title">iGene</h1>
         </header>
         <Dropzone
           onDrop={this.onDrop}
-          style={{ width: '100%', height: '100%', border: '2px dashed black' }}
+          style={{ width: '100%', height: '50%', border: '2px dashed black' }}
         >
           <div style={{ display: 'flex', justifyContent: 'center' }}>
             <p>Drag and drop files, or click for a file dialog to import.</p>
           </div>
-          <p>Reads: {this.state.fastq ? this.state.fastq.length / 4 : 0}</p>
-          <div>{listItems}</div>
+          <Chromosomes />
+          <p>Reads: {this.state.reads.slice(0, 4).map(read => <pre> {read} </pre>)} </p>
+          <p>Variants: {this.state.variants.map(variant => <pre> {variant} </pre>)} </p>
         </Dropzone>
       </div>
     );
