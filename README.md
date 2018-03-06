@@ -1,4 +1,3 @@
-# iBRCA
+# iGene
 
-Experiment to see what can be done with a fastq, or variants provided by a lab solely in the
-browser.
+Experimental single page web app to read and display consumer genomic data
